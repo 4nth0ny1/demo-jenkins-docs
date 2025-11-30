@@ -32,72 +32,154 @@ CREATE TABLE product (
   - spring.jpa.hibernate.ddl-auto=none -->>> spring.jpa.hibernate.ddl-auto=update
 
 ## Add Docker with jenkins instructions 
-Powershell
-1. Stop and remove the old container
-   docker rm -f jenkins-blueocean
+0. Clean slate (containers + volume)
 
-2. (Optional but cleaner) Remove the old volume
+In PowerShell:
 
-Since its plugins were installed for the old Jenkins version:
-
+docker rm -f jenkins jenkins-blueocean
 docker volume rm jenkins_home
 docker volume create jenkins_home
 
-3. Start a modern Jenkins container
 
-Use the official LTS image (has a recent enough core for the Pipeline plugins):
+Errors like No such container are fine if one of them doesn’t exist.
 
-docker run -d --name jenkins `
-  --restart unless-stopped `
--p 8081:8080 -p 50000:50000 `
-  -v jenkins_home:/var/jenkins_home `
--v /var/run/docker.sock:/var/run/docker.sock `
-jenkins/jenkins:lts-jdk21
+1. Run Jenkins (LTS) in Docker, as root, with Docker socket
+
+Use a single-line command to avoid backtick weirdness:
+
+docker run -d --name jenkins --restart unless-stopped -p 8081:8080 -p 50000:50000 -v jenkins_home:/var/jenkins_home -v /var/run/docker.sock:/var/run/docker.sock -u root jenkins/jenkins:lts-jdk21
 
 
-Still reachable at http://localhost:8081
+Jenkins UI will be at: http://localhost:8081
 
-Still has access to Docker via /var/run/docker.sock
+Inside the container, Jenkins runs as root so it can talk to Docker easily.
 
-Now has a newer Jenkins core that matches the Pipeline plugins.
+Check it’s running:
 
-4. Go through setup again
+docker ps
 
-docker logs jenkins → copy the initialAdminPassword
+
+You should see something like:
+
+CONTAINER ID   IMAGE                     PORTS                    NAMES
+xxxxxxx        jenkins/jenkins:lts-jdk21 0.0.0.0:8081->8080/tcp   jenkins
+
+2. Install the Docker CLI inside the Jenkins container
+
+Now we make docker actually work inside the Jenkins container.
+
+Enter the container:
+
+docker exec -it jenkins bash
+
+
+Inside the container shell (Linux):
+
+apt-get update
+apt-get install -y docker.io
+
+
+Quick sanity check (still inside the container):
+
+docker ps
+
+
+You should see at least the jenkins container listed. If that works, Jenkins can now use Docker.
+
+Exit the shell:
+
+exit
+
+3. Unlock Jenkins and install plugins
+
+Get the initial admin password:
+
+docker logs jenkins
+
+
+Look for:
+
+Jenkins initial setup is required. An admin user has been created and a password generated.
+Please use the following password to proceed to installation:
+
+<big-random-token-here>
+
+
+Copy that token.
+
+Then:
 
 Open http://localhost:8081
 
-Unlock Jenkins with that password
+Paste the token to Unlock Jenkins
 
 Choose Install suggested plugins
 
-This time:
+Create your admin user (this will be your Jenkins login)
 
-Pipeline, Pipeline: API, Pipeline: Step API, etc. should install cleanly.
+After the wizard, go to:
 
-No “Jenkins 2.452.4 or higher required” error.
+Manage Jenkins → Manage Plugins → Available
 
-Once that’s done, we can:
+Search and install:
 
-Point it at your GitHub repo
+Docker Pipeline (ID: docker-workflow)
 
-Use your Docker-based Jenkinsfile with agent { docker { image 'maven:3.9.11-eclipse-temurin-21-alpine' } }
+Make sure Pipeline and Git plugins are also installed (they usually are from “suggested plugins”).
 
-```
+4. Jenkinsfile using Docker agent (the “real DevOps way”)
 
-// Jenkinsfile (Declarative Pipeline)
-// Requires the Docker Pipeline plugin
+In your repo 4nth0ny1/demo-jenkins-docs, put this as your Jenkinsfile (at the root):
+
 pipeline {
-    agent { docker { image 'maven:3.9.11-eclipse-temurin-21-alpine' } }
+agent {
+docker {
+image 'maven:3.9.11-eclipse-temurin-21-alpine'
+// optional: cache Maven repo between builds
+args '-v $HOME/.m2:/root/.m2'
+}
+}
+
     stages {
-        stage('build') {
+        stage('Build') {
             steps {
-                sh 'mvn --version'
+                sh 'mvn -B -DskipTests clean package'
             }
         }
     }
 }
 
-```
 
-Get a clean green build for your Spring Boot + SQLite app.
+What this does:
+
+Jenkins itself runs in the jenkins container.
+
+For the pipeline, it spins up a separate Maven container:
+
+image: maven:3.9.11-eclipse-temurin-21-alpine
+
+mounts Maven cache for faster builds
+
+Runs mvn clean package inside that Maven container.
+
+This is the “real DevOps” pattern: Jenkins orchestrates Docker containers to do the work.
+
+5. Run the pipeline
+
+You already have a multibranch job pointed at https://github.com/4nth0ny1/demo-jenkins-docs.git.
+
+Now:
+
+Commit and push the Jenkinsfile change.
+
+In Jenkins, open your multibranch job → branch master → Build Now (or it will auto-build on commit).
+
+In the console log you want to see lines like:
+
+docker inspect -f . maven:3.9.11-eclipse-temurin-21-alpine
+docker pull maven:3.9.11-eclipse-temurin-21-alpine
+...
+[INFO] Building jar...
+
+
+No more docker: not found. If you still see that, it means step 2 (apt-get install docker.io inside container) didn’t run or ran in the wrong container.

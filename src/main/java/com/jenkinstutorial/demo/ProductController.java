@@ -10,17 +10,13 @@ import java.util.List;
 @RequestMapping("/api/products")
 public class ProductController {
 
-    @GetMapping("/")
-    public String home() {
-        return "Store backend is running. Try /api/products";
-    }
-
     private final ProductService productService;
 
     public ProductController(ProductService productService) {
         this.productService = productService;
     }
 
+    @GetMapping
     public List<Product> getAllProducts() {
         return productService.getAllProducts();
     }

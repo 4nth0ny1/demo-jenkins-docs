@@ -1,185 +1,297 @@
-# Jenkins Tutorial
-C:\Users\Anthony\Downloads>java -jar jenkins.war --httpPort=8081 --enable-future-java
+# Jenkins CI/CD Pipeline with Docker, GitHub, and Spring Boot
+_Ongoing DevOps Project_
 
+This repository demonstrates a simple but realistic CI/CD setup using:
 
-## First Commit Spring Boot, No Sqlite Yet
-- setup spring boot with maven.
-- java 17.
-- currently have only getAllProducts. 
+- Jenkins running inside Docker
+- A Spring Boot CRUD API backed by SQLite
+- A Jenkins Declarative Pipeline that builds the app with Maven and pulls code from GitHub
 
-## Sqlite and Seeded Data
-- getAllProducts is working and showing the seeded data 
-- removed data.sql and schema.sql
+It is an ongoing project focused on learning DevOps concepts that are directly useful in interviews and real teams.
+
+---
+
+## Project Overview
+
+This repo includes:
+
+- A minimal Spring Boot backend:
+  - Java 17
+  - Spring Boot 4.0
+  - Spring Data JPA
+  - SQLite database
+- A Jenkinsfile that defines a Declarative Pipeline:
+  - Checks out code from GitHub
+  - Runs Maven inside a Docker container
+- A Docker-based Jenkins setup (Blue Ocean image) that:
+  - Runs Jenkins in a container
+  - Mounts the Docker socket so Jenkins can run Docker containers
+  - Uses a GitHub personal access token for authenticated API access
+
+---
+
+## Tech Stack
+
+### Backend
+
+- Java 17
+- Spring Boot 4.0
+- Spring Web
+- Spring Data JPA
+- SQLite JDBC driver
+
+### DevOps / CI/CD
+
+- Jenkins (Blue Ocean)
+- Jenkins running inside Docker
+- Multibranch Pipeline
+- Docker Workflow plugin
+- GitHub Branch Source plugin
+- Maven build agent container
+
+### Tools
+
+- Docker Desktop
+- Git
+- Maven 3.9+
+- GitHub
+
+---
+
+## Project Structure
+
+```text
+demo-jenkins-docs/
+│
+├── src/main/java/com/jenkinstutorial/demo/
+│   ├── DemoApplication.java
+│   ├── Product.java
+│   ├── ProductRepository.java
+│   ├── ProductService.java
+│   ├── ProductServiceImpl.java
+│   └── ProductController.java
+│
+├── src/main/resources/
+│   ├── application.properties
+│
+├── Jenkinsfile
+└── README.md
 ```
-data.sql
-INSERT INTO product (name, price) VALUES
-('Notebook', 4.99),
-('Pencil', 0.99),
-('Laptop', 899.00);
-```
 
-```
-schema.sql
-DROP TABLE IF EXISTS product;
+---
 
-CREATE TABLE product (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    price REAL NOT NULL
-);
-```
-- changed in applicaiton properties
-  - spring.jpa.hibernate.ddl-auto=none -->>> spring.jpa.hibernate.ddl-auto=update
+## How to Run the Spring Boot API Locally
 
-## Add Docker with jenkins instructions 
-0. Clean slate (containers + volume)
+### Prerequisites
 
-In PowerShell:
+- Git
+- Java 21+
+- Maven 3.9 or higher
 
-docker rm -f jenkins jenkins-blueocean
-docker volume rm jenkins_home
+### Steps
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/4nth0ny1/demo-jenkins-docs.git
+   cd demo-jenkins-docs
+   ```
+
+2. Build and run the application:
+
+   ```bash
+   mvn clean spring-boot:run
+   ```
+
+3. The API will start on:
+
+   ```
+   http://localhost:8080
+   ```
+
+4. Test the endpoint:
+
+   ```bash
+   curl http://localhost:8080/api/products
+   ```
+
+5. The SQLite database file (`demo.db`) will be created automatically.
+
+---
+
+## Running Jenkins in Docker (Full DevOps Setup)
+
+### Prerequisites
+
+- Docker Desktop
+- GitHub PAT (Personal Access Token)
+- GitHub account
+- This repository cloned or forked
+
+### 1. Create Jenkins volume
+
+```bash
 docker volume create jenkins_home
+```
 
+### 2. Start Jenkins container
 
-Errors like No such container are fine if one of them doesn’t exist.
+```bash
+docker run -d   --name jenkins-blueocean   --restart unless-stopped   -p 8081:8080   -p 50000:50000   -v jenkins_home:/var/jenkins_home   -v /var/run/docker.sock:/var/run/docker.sock   devopsjourney1/jenkins-blueocean:2.332.3-1
+```
 
-1. Run Jenkins (LTS) in Docker, as root, with Docker socket
+### 3. Get Jenkins admin password
 
-Use a single-line command to avoid backtick weirdness:
+```bash
+docker exec -it jenkins-blueocean cat /var/jenkins_home/secrets/initialAdminPassword
+```
 
-docker run -d --name jenkins --restart unless-stopped -p 8081:8080 -p 50000:50000 -v jenkins_home:/var/jenkins_home -v /var/run/docker.sock:/var/run/docker.sock -u root jenkins/jenkins:lts-jdk21
+### 4. Open Jenkins UI
 
+```
+http://localhost:8081
+```
 
-Jenkins UI will be at: http://localhost:8081
+Unlock Jenkins → Install suggested plugins → Create admin user.
 
-Inside the container, Jenkins runs as root so it can talk to Docker easily.
+---
 
-Check it’s running:
+## Configuring GitHub Credentials in Jenkins
 
-docker ps
+### 1. Create GitHub PAT
 
+Visit:
+```
+https://github.com/settings/tokens
+```
 
-You should see something like:
+Scopes required:
 
-CONTAINER ID   IMAGE                     PORTS                    NAMES
-xxxxxxx        jenkins/jenkins:lts-jdk21 0.0.0.0:8081->8080/tcp   jenkins
+- `public_repo` (for public repos)
+- or `repo` (for private repos)
 
-2. Install the Docker CLI inside the Jenkins container
+### 2. Add token to Jenkins
 
-Now we make docker actually work inside the Jenkins container.
+Navigate to:
 
-Enter the container:
+```
+Manage Jenkins → Manage Credentials → (global) → Add Credentials
+```
 
-docker exec -it jenkins bash
+Fill in:
 
+- Kind: `Secret text`
+- Secret: `<your GitHub token>`
+- ID: `github-token`
+- Description: GitHub PAT for Jenkins
 
-Inside the container shell (Linux):
+### 3. Configure GitHub server
 
-apt-get update
-apt-get install -y docker.io
+Navigate to:
 
+```
+Manage Jenkins → Configure System → GitHub
+```
 
-Quick sanity check (still inside the container):
+Add GitHub server:
 
-docker ps
+- Name: `github`
+- API URL: `https://api.github.com`
+- Credentials: choose `github-token`
+- Click: **Test Connection**
 
+You should see:
 
-You should see at least the jenkins container listed. If that works, Jenkins can now use Docker.
+```
+GitHub API rate limit: 5000
+```
 
-Exit the shell:
+---
 
-exit
+## Creating the Multibranch Pipeline
 
-3. Unlock Jenkins and install plugins
+1. Click **New Item**
+2. Name: `demo-jenkins`
+3. Select **Multibranch Pipeline**
+4. Under "Branch Sources":
+  - Add source → Git
+  - Repo URL:
 
-Get the initial admin password:
+    ```
+    https://github.com/4nth0ny1/demo-jenkins-docs.git
+    ```
 
-docker logs jenkins
+  - Credentials: select `github-token`
+5. Save
 
+Jenkins will:
 
-Look for:
+- Scan the repo
+- Detect the `Jenkinsfile`
+- Create jobs automatically
+- Trigger builds
 
-Jenkins initial setup is required. An admin user has been created and a password generated.
-Please use the following password to proceed to installation:
+---
 
-<big-random-token-here>
+## Jenkinsfile (Pipeline Summary)
 
-
-Copy that token.
-
-Then:
-
-Open http://localhost:8081
-
-Paste the token to Unlock Jenkins
-
-Choose Install suggested plugins
-
-Create your admin user (this will be your Jenkins login)
-
-After the wizard, go to:
-
-Manage Jenkins → Manage Plugins → Available
-
-Search and install:
-
-Docker Pipeline (ID: docker-workflow)
-
-Make sure Pipeline and Git plugins are also installed (they usually are from “suggested plugins”).
-
-4. Jenkinsfile using Docker agent (the “real DevOps way”)
-
-In your repo 4nth0ny1/demo-jenkins-docs, put this as your Jenkinsfile (at the root):
-
+```groovy
 pipeline {
-agent {
-docker {
-image 'maven:3.9.11-eclipse-temurin-21-alpine'
-// optional: cache Maven repo between builds
-args '-v $HOME/.m2:/root/.m2'
-}
-}
+    agent {
+        docker { image 'maven:3.9.11-eclipse-temurin-21-alpine' }
+    }
 
     stages {
         stage('Build') {
             steps {
+                sh 'mvn --version'
                 sh 'mvn -B -DskipTests clean package'
             }
         }
     }
 }
+```
 
+---
 
-What this does:
+## How Anyone Can Reproduce the Entire Setup
 
-Jenkins itself runs in the jenkins container.
+1. Install Docker Desktop
+2. Clone this repo:
 
-For the pipeline, it spins up a separate Maven container:
+   ```bash
+   git clone https://github.com/4nth0ny1/demo-jenkins-docs.git
+   ```
 
-image: maven:3.9.11-eclipse-temurin-21-alpine
+3. Start Jenkins with the Docker command above
+4. Unlock Jenkins & install plugins
+5. Add GitHub token
+6. Configure GitHub server
+7. Create Multibranch Pipeline
+8. Jenkins auto-builds the project
 
-mounts Maven cache for faster builds
+Optional: run the Spring Boot app locally:
 
-Runs mvn clean package inside that Maven container.
+```bash
+mvn spring-boot:run
+```
 
-This is the “real DevOps” pattern: Jenkins orchestrates Docker containers to do the work.
+---
 
-5. Run the pipeline
+## Roadmap / Future Work
 
-You already have a multibranch job pointed at https://github.com/4nth0ny1/demo-jenkins-docs.git.
+- Add unit tests + pipeline test stage
+- Add Dockerfile for backend
+- Build & push Docker images in Jenkins
+- Add deployment stage (Docker Compose or Kubernetes)
+- Add GitHub webhooks for instant builds
+- Add code-quality tools (SpotBugs, Checkstyle)
+- Add Slack/email notifications
 
-Now:
+---
 
-Commit and push the Jenkinsfile change.
+## Author
 
-In Jenkins, open your multibranch job → branch master → Build Now (or it will auto-build on commit).
-
-In the console log you want to see lines like:
-
-docker inspect -f . maven:3.9.11-eclipse-temurin-21-alpine
-docker pull maven:3.9.11-eclipse-temurin-21-alpine
-...
-[INFO] Building jar...
-
-
-No more docker: not found. If you still see that, it means step 2 (apt-get install docker.io inside container) didn’t run or ran in the wrong container.
+**Anthony Catullo**  
+Backend Developer & DevOps
+GitHub: https://github.com/4nth0ny1/demo-jenkins-docs

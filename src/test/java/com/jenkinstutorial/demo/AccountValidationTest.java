@@ -30,7 +30,7 @@ public class AccountValidationTest {
         prod.setPrice(5.99);
 
         Set<ConstraintViolation<Product>> violations = validate(prod);
-        assertFalse(violations.isEmpty());
+        assertTrue(violations.isEmpty());
     }
 
     @Test

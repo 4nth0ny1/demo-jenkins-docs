@@ -1,10 +1,7 @@
 package com.jenkinstutorial.demo;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-
+import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
 @Entity
 public class Product {
 
@@ -13,7 +10,10 @@ public class Product {
     private Long id;
 
     private String name;
-    private double price;
+
+    @NotNull(message = "Price is required")
+    @Column(nullable = false)
+    private Double price;
 
     public Product() {}
 
@@ -38,7 +38,7 @@ public class Product {
         this.name = name;
     }
 
-    public double getPrice() {
+    public Double getPrice() {
         return price;
     }
 

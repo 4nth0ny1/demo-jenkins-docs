@@ -27,6 +27,19 @@ pipeline {
             }
         }
 
+        stage('Quality') {
+            steps {
+                // Run converage + Spotbugs
+                sh 'mvn -B jacoco:report spotbugs:check'
+            }
+            post {
+                always {
+                    // archive the converage and SpotBugs reports
+                    archiveArtifacts artifacts: 'target/site/**', fingerprint: false
+                }
+            }
+        }
+
         stage('Package') {
             steps {
                 // package the app (tests already ran in previous stage)

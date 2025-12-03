@@ -10,7 +10,30 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                sh 'mvn -B -DskipTests clean package'
+                sh 'mvn -B clean compile'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                // compile the project (no tests here)
+                sh 'mvn -B test'
+            }
+            post {
+                always {
+                    // so Jenkins still shows results even if tests fail.
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('Package') {
+            steps {
+                // package the app (tests already ran in previous stage)
+                sh 'mvn -B -DskipTests package'
+
+                // archive the jar and make it downloadable from Jenkins
+                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
     }

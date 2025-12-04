@@ -10,14 +10,14 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                sh 'mvn -B clean compile'
+                sh 'mvn -B -ntp clean compile'
             }
         }
 
         stage('Test') {
             steps {
                 // compile the project (no tests here)
-                sh 'mvn -B test'
+                sh 'mvn -B -ntp test'
             }
             post {
                 always {
@@ -29,12 +29,12 @@ pipeline {
 
         stage('Quality') {
             steps {
-                // Run converage + Spotbugs
-                sh 'mvn -B jacoco:report spotbugs:check'
+                // Run coverage + Spotbugs
+                sh 'mvn -B -ntp jacoco:report jacoco:check spotbugs:check'
             }
             post {
                 always {
-                    // archive the converage and SpotBugs reports
+                    // archive the coverage and SpotBugs reports
                     archiveArtifacts artifacts: 'target/site/**', fingerprint: false
                 }
             }
@@ -43,10 +43,18 @@ pipeline {
         stage('Package') {
             steps {
                 // package the app (tests already ran in previous stage)
-                sh 'mvn -B -DskipTests package'
+                sh 'mvn -B -ntp -DskipTests package'
 
                 // archive the jar and make it downloadable from Jenkins
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+            }
+        }
+
+        stage('Info') {
+            steps {
+                echo "Git metadata for this build:"
+                sh 'git rev-parse HEAD'
+                sh 'git rev-parse --abbrev-ref HEAD'
             }
         }
     }

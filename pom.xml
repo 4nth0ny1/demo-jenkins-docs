@@ -127,17 +127,45 @@
 				<artifactId>jacoco-maven-plugin</artifactId>
 				<version>0.8.12</version>
 				<executions>
+					<!-- Attach jacoco agent when tests run-->
 					<execution>
 						<goals>
 							<goal>prepare-agent</goal>
 						</goals>
 					</execution>
+
+					<!-- Generate html report -->
 					<execution>
 						<id>report</id>
 						<phase>test</phase>
 						<goals>
 							<goal>report</goal>
 						</goals>
+					</execution>
+
+					<!-- Enforce minimum coverage -->
+					<execution>
+						<id>check</id>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<rule>
+									<!-- Check whole project -->
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<!-- What to measure -->
+											<counter>INSTRUCTION</counter>
+											<value>COVEREDRATIO</value>
+											<!-- Start with a low bar so it passes initially -->
+											<minimum>0.20</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+						</configuration>
 					</execution>
 				</executions>
 			</plugin>

@@ -52,19 +52,45 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                // Install docker client inside the Maven container (Alpine)
-                sh 'apk update && apk add --no-cache docker-cli'
+                // Install docker client and curl inside the Maven container (Alpine)
+                sh 'apk update && apk add --no-cache docker-cli curl'
 
-                // Optional: sanity check
                 sh 'docker version'
 
-                // Build Docker image using the Dockerfile in the repo root
                 sh "docker build -t demo-app:${env.BUILD_NUMBER} ."
-
-                // Tag a 'latest' version for convenience
                 sh "docker tag demo-app:${env.BUILD_NUMBER} demo-app:latest"
             }
         }
+
+        stage('Smoke Test') {
+            steps {
+                script {
+                    echo "Running container for smoke test..."
+
+                    // Use a nonstandard host port (8081) to avoid conflicts with anything else
+                    sh "docker run -d --rm -p 8081:8080 --name demo-smoke-test demo-app:${env.BUILD_NUMBER}"
+
+                    echo "Waiting for app to start..."
+                    sh "sleep 5"
+
+                    echo "Checking /api/products endpoint..."
+                    sh """
+                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/api/products || true)
+                        if [ "\$STATUS" != "200" ]; then
+                            echo "Smoke test failed for /api/products. HTTP status: \$STATUS"
+                            exit 1
+                        fi
+                    """
+                }
+            }
+            post {
+                always {
+                    echo "Stopping test container..."
+                    sh "docker stop demo-smoke-test || true"
+                }
+            }
+        }
+
 
         stage('Info') {
             steps {

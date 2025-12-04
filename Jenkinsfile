@@ -75,12 +75,15 @@ pipeline {
                     echo "Waiting for app to start..."
                     sh "sleep 8"
 
-                    echo "Checking /api/products endpoint..."
+                    echo "Checking /api/products endpoint from Jenkins container..."
                     sh """
-                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:18080/api/products || true)
+                        echo "Attempting health check against http://host.docker.internal:18080/api/products"
+                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://host.docker.internal:18080/api/products || true)
                         if [ "\$STATUS" != "200" ]; then
                             echo "Smoke test failed for /api/products. HTTP status: \$STATUS"
                             exit 1
+                        else
+                            echo "Smoke test passed with status 200"
                         fi
                     """
                 }
@@ -92,6 +95,7 @@ pipeline {
                 }
             }
         }
+
 
 
 

@@ -50,11 +50,30 @@ pipeline {
             }
         }
 
+        stage('Docker Build') {
+            steps {
+                // Install docker client inside the Maven container (Alpine)
+                sh 'apk update && apk add --no-cache docker-cli'
+
+                // Optional: sanity check
+                sh 'docker version'
+
+                // Build Docker image using the Dockerfile in the repo root
+                sh "docker build -t demo-app:${env.BUILD_NUMBER} ."
+
+                // Tag a 'latest' version for convenience
+                sh "docker tag demo-app:${env.BUILD_NUMBER} demo-app:latest"
+            }
+        }
+
         stage('Info') {
             steps {
                 echo "Git metadata for this build:"
                 echo "Branch: ${env.BRANCH_NAME}"
                 echo "Commit: ${env.GIT_COMMIT}"
+                echo "Docker image tags:"
+                echo "  demo-app:${env.BUILD_NUMBER}"
+                echo "  demo-app:latest"
             }
         }
     }

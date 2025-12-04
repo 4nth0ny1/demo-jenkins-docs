@@ -65,17 +65,19 @@ pipeline {
         stage('Smoke Test') {
             steps {
                 script {
-                    echo "Running container for smoke test..."
+                    echo "Cleaning up any previous smoke test container..."
+                    sh "docker stop demo-smoke-test || true"
+                    sh "docker rm -f demo-smoke-test || true"
 
-                    // Use a nonstandard host port (8081) to avoid conflicts with anything else
-                    sh "docker run -d --rm -p 8081:8080 --name demo-smoke-test demo-app:${env.BUILD_NUMBER}"
+                    echo "Running container for smoke test on host port 18080..."
+                    sh "docker run -d --rm -p 18080:8080 --name demo-smoke-test demo-app:${env.BUILD_NUMBER}"
 
                     echo "Waiting for app to start..."
-                    sh "sleep 5"
+                    sh "sleep 8"
 
                     echo "Checking /api/products endpoint..."
                     sh """
-                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/api/products || true)
+                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:18080/api/products || true)
                         if [ "\$STATUS" != "200" ]; then
                             echo "Smoke test failed for /api/products. HTTP status: \$STATUS"
                             exit 1
@@ -90,6 +92,7 @@ pipeline {
                 }
             }
         }
+
 
 
         stage('Info') {

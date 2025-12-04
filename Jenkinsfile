@@ -73,31 +73,51 @@ pipeline {
                     sh "docker run -d --rm --name demo-smoke-test demo-app:${env.BUILD_NUMBER}"
 
                     echo "Waiting for app to start..."
-                    sh "sleep 10"
+                    sh "sleep 5"
 
+                    // Retry loop: give the app up to ~30 seconds total
                     echo "Checking /api/products endpoint from a helper curl container..."
                     sh """
-                        STATUS=\$(docker run --rm --network container:demo-smoke-test curlimages/curl:latest \\
-                            -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/products || true)
+                        ATTEMPTS=0
+                        MAX_ATTEMPTS=10
+                        STATUS=000
 
-                        echo "Smoke test HTTP status: \$STATUS"
+                        while [ \$ATTEMPTS -lt \$MAX_ATTEMPTS ]; do
+                            echo "Smoke test attempt \$((ATTEMPTS+1))..."
+                            STATUS=\$(docker run --rm --network container:demo-smoke-test curlimages/curl:latest \\
+                                -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/products || true)
+
+                            echo "HTTP status: \$STATUS"
+
+                            if [ "\$STATUS" = "200" ]; then
+                                echo "Smoke test passed with status 200"
+                                break
+                            fi
+
+                            ATTEMPTS=\$((ATTEMPTS+1))
+                            echo "Waiting before retry..."
+                            sleep 3
+                        done
 
                         if [ "\$STATUS" != "200" ]; then
-                            echo "Smoke test failed for /api/products. HTTP status: \$STATUS"
+                            echo "Smoke test FAILED after \$MAX_ATTEMPTS attempts. Last status: \$STATUS"
                             exit 1
-                        else
-                            echo "Smoke test passed with status 200"
                         fi
                     """
                 }
             }
             post {
+                failure {
+                    echo "Smoke test failed. Dumping container logs for demo-smoke-test:"
+                    sh "docker logs demo-smoke-test || true"
+                }
                 always {
                     echo "Stopping test container..."
                     sh "docker stop demo-smoke-test || true"
                 }
             }
         }
+
 
 
 

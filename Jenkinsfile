@@ -53,8 +53,8 @@ pipeline {
         stage('Info') {
             steps {
                 echo "Git metadata for this build:"
-                sh 'git rev-parse HEAD'
-                sh 'git rev-parse --abbrev-ref HEAD'
+                echo "Branch: ${env.BRANCH_NAME}"
+                echo "Commit: ${env.GIT_COMMIT}"
             }
         }
     }

@@ -69,16 +69,19 @@ pipeline {
                     sh "docker stop demo-smoke-test || true"
                     sh "docker rm -f demo-smoke-test || true"
 
-                    echo "Running container for smoke test on host port 18080..."
-                    sh "docker run -d --rm -p 18080:8080 --name demo-smoke-test demo-app:${env.BUILD_NUMBER}"
+                    echo "Running container for smoke test (no host port mapping needed)..."
+                    sh "docker run -d --rm --name demo-smoke-test demo-app:${env.BUILD_NUMBER}"
 
                     echo "Waiting for app to start..."
-                    sh "sleep 8"
+                    sh "sleep 10"
 
-                    echo "Checking /api/products endpoint from Jenkins container..."
+                    echo "Checking /api/products endpoint from a helper curl container..."
                     sh """
-                        echo "Attempting health check against http://host.docker.internal:18080/api/products"
-                        STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://host.docker.internal:18080/api/products || true)
+                        STATUS=\$(docker run --rm --network container:demo-smoke-test curlimages/curl:latest \\
+                            -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/products || true)
+
+                        echo "Smoke test HTTP status: \$STATUS"
+
                         if [ "\$STATUS" != "200" ]; then
                             echo "Smoke test failed for /api/products. HTTP status: \$STATUS"
                             exit 1
@@ -95,6 +98,7 @@ pipeline {
                 }
             }
         }
+
 
 
 

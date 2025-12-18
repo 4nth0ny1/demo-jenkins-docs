@@ -12,6 +12,7 @@ pipeline {
     }
 
     options {
+        disableConcurrentBuilds()
         timestamps()
     }
 
@@ -72,45 +73,57 @@ pipeline {
             }
         }
 
-        stage('Smoke Test') {
-            steps {
-                script {
-                    sh "docker rm -f ${CONTAINER_NAME} || true"
+       stage('Smoke Test') {
+           steps {
+               script {
+                   String smokeName = "demo-smoke-test-${env.BUILD_TAG}".replaceAll('[^A-Za-z0-9_.-]', '-')
 
-                    sh "docker run -d --rm --name ${CONTAINER_NAME} ${APP_NAME}:${BUILD_NUMBER}"
+                   echo "Smoke container name: ${smokeName}"
 
-                    sh """
-                        ATTEMPTS=0
-                        MAX_ATTEMPTS=10
-                        STATUS=000
+                   // Always cleanup (ignore errors)
+                   sh "docker rm -f ${smokeName} || true"
 
-                        while [ \$ATTEMPTS -lt \$MAX_ATTEMPTS ]; do
-                            STATUS=\$(docker run --rm --network container:${CONTAINER_NAME} curlimages/curl:latest \\
-                                -s -o /dev/null -w '%{http_code}' ${SMOKE_URL} || true)
+                   echo "Running container for smoke test..."
+                   sh "docker run -d --rm --name ${smokeName} demo-app:${env.BUILD_NUMBER}"
 
-                            echo "HTTP status: \$STATUS"
+                   echo "Checking /api/products endpoint with retries..."
+                   sh """
+                       ATTEMPTS=0
+                       MAX_ATTEMPTS=10
+                       STATUS=000
 
-                            if [ "\$STATUS" = "200" ]; then
-                                echo "Smoke test passed"
-                                exit 0
-                            fi
+                       while [ \$ATTEMPTS -lt \$MAX_ATTEMPTS ]; do
+                           STATUS=\$(docker run --rm --network container:${smokeName} curlimages/curl:latest \\
+                               -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/products || true)
 
-                            ATTEMPTS=\$((ATTEMPTS+1))
-                            sleep 3
-                        done
+                           echo "HTTP status: \$STATUS"
 
-                        echo "Smoke test FAILED after \$MAX_ATTEMPTS attempts. Last status: \$STATUS"
-                        docker logs ${CONTAINER_NAME} || true
-                        exit 1
-                    """
-                }
-            }
-            post {
-                always {
-                    sh "docker stop ${CONTAINER_NAME} || true"
-                }
-            }
-        }
+                           if [ "\$STATUS" = "200" ]; then
+                               echo "Smoke test passed"
+                               exit 0
+                           fi
+
+                           ATTEMPTS=\$((ATTEMPTS+1))
+                           sleep 3
+                       done
+
+                       echo "Smoke test FAILED after \$MAX_ATTEMPTS attempts. Last status: \$STATUS"
+                       docker logs ${smokeName} || true
+                       exit 1
+                   """
+               }
+           }
+           post {
+               always {
+                   script {
+                       String smokeName = "demo-smoke-test-${env.BUILD_TAG}".replaceAll('[^A-Za-z0-9_.-]', '-')
+                       sh "docker rm -f ${smokeName} || true"
+                   }
+               }
+           }
+       }
+
+
 
         stage('Info') {
             steps {

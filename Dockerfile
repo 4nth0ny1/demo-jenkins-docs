@@ -1,15 +1,13 @@
-# Build a minimal image to run the Spring Boot jar
 FROM eclipse-temurin:21-jre-alpine
 
-# Working directory inside the container
 WORKDIR /app
 
-# Copy the Spring Boot jar from the Jenkins/Maven build
-# This path must match the jar your Package stage creates
-COPY target/demo-0.0.1-SNAPSHOT.jar app.jar
+ARG JAR_FILE=target/*.jar
+COPY ${JAR_FILE} app.jar
 
-# Expose the port your app listens on
+RUN addgroup -S app && adduser -S app -G app
+USER app
+
 EXPOSE 8080
 
-# Run the application
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-jar", "/app/app.jar"]

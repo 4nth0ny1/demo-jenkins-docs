@@ -5,7 +5,7 @@ WORKDIR /app
 ARG JAR_FILE=target/*.jar
 COPY ${JAR_FILE} app.jar
 
-# Create non-root user and a writable data directory for SQLite
+# Non-root user + writable SQLite directory
 RUN addgroup -S app \
  && adduser -S app -G app \
  && mkdir -p /app/data \

@@ -80,11 +80,27 @@ pipeline {
 
                    echo "Smoke container name: ${smokeName}"
 
-                   // Always cleanup (ignore errors)
+                   // Cleanup from any previous attempt
                    sh "docker rm -f ${smokeName} || true"
 
-                   echo "Running container for smoke test..."
-                   sh "docker run -d --rm --name ${smokeName} demo-app:${env.BUILD_NUMBER}"
+                   echo "Running container for smoke test (no --rm so we can read logs if it crashes)..."
+                   sh "docker run -d --name ${smokeName} ${env.APP_NAME}:${env.BUILD_NUMBER}"
+
+                   echo "Give the app a moment to start..."
+                   sh "sleep 3"
+
+                   // If the container already died, fail immediately with logs
+                   sh """
+                       RUNNING=\$(docker inspect -f '{{.State.Running}}' ${smokeName} 2>/dev/null || echo 'false')
+                       if [ "\$RUNNING" != "true" ]; then
+                           echo "Smoke container is NOT running (it likely crashed)."
+                           echo "Container state:"
+                           docker inspect ${smokeName} || true
+                           echo "Container logs:"
+                           docker logs ${smokeName} || true
+                           exit 1
+                       fi
+                   """
 
                    echo "Checking /api/products endpoint with retries..."
                    sh """
@@ -93,8 +109,17 @@ pipeline {
                        STATUS=000
 
                        while [ \$ATTEMPTS -lt \$MAX_ATTEMPTS ]; do
+                           # If container disappears, stop retrying and dump logs
+                           EXISTS=\$(docker ps -q -f name=^/${smokeName}\$ || true)
+                           if [ -z "\$EXISTS" ]; then
+                               echo "Smoke container is no longer running."
+                               echo "Container logs:"
+                               docker logs ${smokeName} || true
+                               exit 1
+                           fi
+
                            STATUS=\$(docker run --rm --network container:${smokeName} curlimages/curl:latest \\
-                               -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/products || true)
+                               -s -o /dev/null -w '%{http_code}' ${env.SMOKE_URL} || true)
 
                            echo "HTTP status: \$STATUS"
 
@@ -108,6 +133,7 @@ pipeline {
                        done
 
                        echo "Smoke test FAILED after \$MAX_ATTEMPTS attempts. Last status: \$STATUS"
+                       echo "Container logs:"
                        docker logs ${smokeName} || true
                        exit 1
                    """
@@ -122,6 +148,7 @@ pipeline {
                }
            }
        }
+
 
 
 
